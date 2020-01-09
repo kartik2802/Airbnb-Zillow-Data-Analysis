@@ -1,0 +1,1037 @@
+---
+title: "Untitled"
+author: "Kartik Nagarajan"
+date: "December 18, 2019"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+---
+
+
+```{r}
+library(scales)
+library(rlang)
+#library(Tableau)
+library(lattice)
+library(DataExplorer)
+library(cowplot)
+library(caret)
+library(Matrix)
+library(MatrixModels)
+library(tm)
+library(wordcloud) 
+library(RColorBrewer)
+library(tidyverse)
+library(haven)
+library(readxl)
+library(xml2)
+library(ggpubr)
+library(ggplot2)
+library(plotly)
+library(matrixStats)
+library(kableExtra)
+library(data.table)
+library(ggthemes)
+library(dplyr)
+library(GGally)
+library(ggthemes)
+library(UpSetR)
+library(naniar)
+library(visdat)
+library(corrplot)
+library(xgboost)
+
+```
+The data set has 8946 rows and 262 columns
+Cost(zillow) and Revenue(Airbnb) datasets are first cleaned individually and then joined in order to improve the overall data quality.
+
+Process:
+I have catered to the main issues with bad quality of data which are:  
+Missing Values, Duplicated Rows  
+We can delete rows with having more than 50% missing values and also making sure to check the effect of removing a particular variable by checking its overall variance using statistical modeling in SAS.
+
+We can also use principal component analysis in order to reduce overal variables which wont impact the overall variance by much.
+Filter imbalanced columns, cater to categorical variables, high missing value columns, columns not associated to the problem statement etc.
+Analyze any redudant columns and aggregate based on reasoning/assumptions. Check for correlation between variables in order to detect multicollinearity which could be a big problem during statistical modelling.
+
+Produce clean cost and revenue data for joining and further explore the joined data to derive meaningful insights.
+```{r}
+cost <- read.csv("C:/Users/Kartik/Airbnb/Zillow_dataset.csv")
+#View(cost)
+dim(cost)
+
+head(cost)
+revenue <- read.csv("C:/Users/Kartik/Airbnb/airbnbbbbbbb.csv")
+#View(revenue)
+
+
+kable(head(cost))  %>% kable_styling (bootstrap_options = c("striped", "hover", "responsive")) %>% scroll_box(width = "100%", height = "250px")
+#cost
+#head(cost)
+
+```
+
+
+Missing Values
+Median Price for early years (1996-2014) has plenty of Null values as shown in the table below.
+This is not consistent across all Regionnames. In order to cater this we have to make sure to handle this null values in a more effective manner.
+
+This data showcases the number of missing vlaues for each of the variables. Seeing this table helps us in understanding quality of each variables and implement methods for variable selection and feature engineering.
+
+```{r}
+numMissingVal <-sapply(cost, function(x) sum(length(which(is.na(x)))))  
+#numMissingVal
+
+colnames(cost)
+
+colnames(revenue)
+
+kable(as.data.frame(numMissingVal)) %>% kable_styling(bootstrap_options = c("striped", "hover", "responsive")) %>% scroll_box(width = "100%", height = "250px")
+# to check non negative values
+
+costCharCol <- colnames(cost %>% ungroup() %>% select_if(is.character))
+#costCharCol
+costZeroNeg <- sapply(cost[, !(names(cost) %in% costCharCol)], function(x)
+ count(x <= 0, na.rm = TRUE))
+kable(as.data.frame(costZeroNeg)) %>% kable_styling(bootstrap_options = c("striped", "hover", "responsive")) %>% scroll_box(width = "100%", height = "250px")
+
+# In order to find duplicate rows in the dataset
+cost[which(duplicated(cost) ==T),] 
+
+#Selecting the city in the dataset
+cost <- cost %>% filter(City == "New York")
+cost$City
+
+
+#Creating a list of the years
+yearList <- as.character(as.list(2005:2017))
+yearList
+
+#calculating the median years
+cost1<- cost[,-c(1,3,4,5,6,7)]
+medianYears <- data.frame()
+medianYears
+
+```
+
+```{r}
+
+medianYearCol <- cost %>% select(starts_with('X2005'), RegionName) %>% mutate(Median = rowMedians(as.matrix(select(., -matches("RegionName")))))
+medianYearCol <- medianYearCol %>% select(RegionName,Median)
+  
+medianYearCol$year<- rep(2005, nrow(medianYearCol))
+medianYears<-rbind(medianYears,medianYearCol)
+
+
+head(medianYearCol)
+head(medianYears)
+
+medianYearCol <- cost %>% select(starts_with('X2006'), RegionName) %>% mutate(Median = rowMedians(as.matrix(select(., -matches("RegionName")))))
+medianYearCol <- medianYearCol %>% select(RegionName,Median)
+
+medianYearCol$year<- rep(2006, nrow(medianYearCol))
+medianYears<-rbind(medianYears,medianYearCol)
+
+
+head(medianYearCol)
+head(medianYears)
+
+medianYearCol <- cost %>% select(starts_with('X2007'), RegionName) %>% mutate(Median = rowMedians(as.matrix(select(., -matches("RegionName")))))
+medianYearCol <- medianYearCol %>% select(RegionName,Median)
+
+medianYearCol$year<- rep(2007, nrow(medianYearCol))
+medianYears<-rbind(medianYears,medianYearCol)
+
+
+head(medianYearCol)
+head(medianYears)
+
+medianYearCol <- cost %>% select(starts_with('X2008'), RegionName) %>% mutate(Median = rowMedians(as.matrix(select(., -matches("RegionName")))))
+medianYearCol <- medianYearCol %>% select(RegionName,Median)
+
+medianYearCol$year<- rep(2008, nrow(medianYearCol))
+medianYears<-rbind(medianYears,medianYearCol)
+
+
+head(medianYearCol)
+head(medianYears)
+
+medianYearCol <- cost %>% select(starts_with('X2009'), RegionName) %>% mutate(Median = rowMedians(as.matrix(select(., -matches("RegionName")))))
+medianYearCol <- medianYearCol %>% select(RegionName,Median)
+
+medianYearCol$year<- rep(2009, nrow(medianYearCol))
+medianYears<-rbind(medianYears,medianYearCol)
+
+
+head(medianYearCol)
+head(medianYears)
+
+medianYearCol <- cost %>% select(starts_with('X2010'), RegionName) %>% mutate(Median = rowMedians(as.matrix(select(., -matches("RegionName")))))
+medianYearCol <- medianYearCol %>% select(RegionName,Median)
+
+medianYearCol$year<- rep(2010, nrow(medianYearCol))
+medianYears<-rbind(medianYears,medianYearCol)
+
+
+head(medianYearCol)
+head(medianYears)
+
+medianYearCol <- cost %>% select(starts_with('X2011'), RegionName) %>% mutate(Median = rowMedians(as.matrix(select(., -matches("RegionName")))))
+medianYearCol <- medianYearCol %>% select(RegionName,Median)
+
+medianYearCol$year<- rep(2011, nrow(medianYearCol))
+medianYears<-rbind(medianYears,medianYearCol)
+
+
+head(medianYearCol)
+head(medianYears)
+
+medianYearCol <- cost %>% select(starts_with('X2012'), RegionName) %>% mutate(Median = rowMedians(as.matrix(select(., -matches("RegionName")))))
+medianYearCol <- medianYearCol %>% select(RegionName,Median)
+
+medianYearCol$year<- rep(2012, nrow(medianYearCol))
+medianYears<-rbind(medianYears,medianYearCol)
+
+
+head(medianYearCol)
+head(medianYears)
+
+medianYearCol <- cost %>% select(starts_with('X2013'), RegionName) %>% mutate(Median = rowMedians(as.matrix(select(., -matches("RegionName")))))
+medianYearCol <- medianYearCol %>% select(RegionName,Median)
+
+medianYearCol$year<- rep(2013, nrow(medianYearCol))
+medianYears<-rbind(medianYears,medianYearCol)
+
+
+head(medianYearCol)
+head(medianYears)
+
+
+medianYearCol <- cost %>% select(starts_with('X2014'), RegionName) %>% mutate(Median = rowMedians(as.matrix(select(., -matches("RegionName")))))
+medianYearCol <- medianYearCol %>% select(RegionName,Median)
+
+medianYearCol$year<- rep(2014, nrow(medianYearCol))
+medianYears<-rbind(medianYears,medianYearCol)
+
+
+head(medianYearCol)
+head(medianYears)
+
+medianYearCol <- cost %>% select(starts_with('X2015'), RegionName) %>% mutate(Median = rowMedians(as.matrix(select(., -matches("RegionName")))))
+medianYearCol <- medianYearCol %>% select(RegionName,Median)
+
+medianYearCol$year<- rep(2015, nrow(medianYearCol))
+medianYears<-rbind(medianYears,medianYearCol)
+
+
+head(medianYearCol)
+head(medianYears)
+
+
+medianYearCol <- cost %>% select(starts_with('X2016'), RegionName) %>% mutate(Median = rowMedians(as.matrix(select(., -matches("RegionName")))))
+medianYearCol <- medianYearCol %>% select(RegionName,Median)
+
+medianYearCol$year<- rep(2016, nrow(medianYearCol))
+medianYears<-rbind(medianYears,medianYearCol)
+
+
+head(medianYearCol)
+head(medianYears)
+
+medianYearCol <- cost %>% select(starts_with('X2017'), RegionName) %>% mutate(Median = rowMedians(as.matrix(select(., -matches("RegionName")))))
+medianYearCol <- medianYearCol %>% select(RegionName,Median)
+
+medianYearCol$year<- rep(2017, nrow(medianYearCol))
+medianYears<-rbind(medianYears,medianYearCol)
+
+
+head(medianYearCol)
+head(medianYears)
+
+```
+
+Median Price Change Over 5 Years
+Upper half(Orange) of line graph highlights regionNames with significant increase in the median cost price. 
+With RegionName = 10003, 10014 & 10011 median cost price increasing by 0.5 Mn in a matter of 5 years (2013-2017).
+
+Lower half of the plot sees little or no increase. In further sections, each zipcode will further analyzed to reason out these trends.
+```{r}
+str(cost$RegionName)
+RegionName <- as.numeric(cost$RegionName)
+medianPriceAll <-
+  medianYears %>% filter(year > 2012) %>% ggplot(aes(
+    x = year,
+    y = Median,
+    
+    group = RegionName,
+    colour = RegionName
+  )) + geom_line() + geom_point() + scale_y_continuous(labels = scales::comma)
+ggplotly(medianPriceAll)
+```
+
+Median Price Change Over 2 Years
+Growth/Increase in median cost price measured for recent 2 consecutive years (2016,2017) shares a different story. The market has been dry with little or no fluctuation. Median Cost for regionName - 10003 
+which had an upward trend for over 4-5 years (2013-2016) has dropped by 0.1 mn. Rest of the regionNames have little or no increase.
+
+```{r}
+medianPriceAll <-
+  medianYears %>% filter(year > (2014)) %>% ggplot(aes(
+    x = year,
+    y = Median,
+    group = RegionName,
+    colour = RegionName
+  )) + geom_line() + geom_point() + scale_y_continuous(labels = scales::comma)
+ggplotly(medianPriceAll)
+
+```
+
+Clean Cost Data
+From the above analysis, it is safe to assume that Median Cost Price for Homes have rather not a significant increment the past 2 years.To reduce the complexicity of data in hand, median cost price for year (2017) is chosen to be the actual price of the individual
+
+2 bedroom properties across every regionName(zipcode) is filtered based on the requirement. Decisions made here on will be based on this assumption.
+Choosing the Last One Year Median Price 
+
+```{r}
+currentMedianPrice <- medianYears %>% filter(year == 2017)
+
+
+cost <-
+  cost %>% select(RegionName, CountyName, SizeRank) %>% inner_join(currentMedianPrice, by = "RegionName")
+cost <- rename(cost, cost = Median)
+
+kable(head(cost))  %>% kable_styling(bootstrap_options = c("striped", "hover", "responsive")) %>% scroll_box(width = "100%", height = "250px")
+
+```
+
+Revenue Data (Airbnb Data)
+Revenue data contains a mix of information including details about the properties like 
+address, bedrooms, zipcode ,bathrooms to information about host, daily/weekly and monthly price details for stay.
+
+```{r}
+kable(head(revenue))  %>% kable_styling(bootstrap_options = c("striped", "hover", "responsive")) %>% scroll_box(width = "100%", height = "250px")
+```
+
+Data Quality Check
+
+Missing Values
+Majority of description columns and host related information are blank. Steps are taken in the following section to filter columns with higher percentage of Nulls/NA.
+
+It is also important how we handle missing value for example based on the variable and number of missing values we can either remove the missing values , or depending on the requirement we can impute the missing values by 0 or mean , median , mode , regression etc.
+```{r}
+numMissingVal <-sapply(revenue, function(x) sum(length(which(is.na(x)))))  
+kable(as.data.frame(numMissingVal)) %>% kable_styling(bootstrap_options = c("striped", "hover", "responsive")) %>% scroll_box(width = "100%", height = "250px")
+```
+
+
+Account for Missing Zipcodes
+Zipcode column contains 611 missing values. Ignoring these values can prove detrimental to the analysis. Zipcodes are imputed by selecting a non-NA value from Neighbourhood Group Cleansed.
+
+Total Number of NA values in Zipcode Column after Imputation:
+```{r}
+revenue <-
+  revenue %>% group_by(neighbourhood_group_cleansed) %>% fill(zipcode) %>% ungroup()
+
+sum(is.array(revenue$zipcode))
+
+```
+Dollar-ed Price Columns
+Value prefix of every price row prevents numeric manipulation. It is thus removed from three columns: Price, Weekly Price & Monthly Price.
+```{r}
+revenue$price <- as.numeric(gsub('[$,]','', revenue$price))
+revenue$weekly_price <- as.numeric(gsub('[$,]','', revenue$weekly_price))
+revenue$monthly_price <- as.numeric(gsub('[$,]','', revenue$monthly_price))
+head(revenue[c("price","weekly_price","monthly_price")])
+```
+
+Negative or Zero Valued Columns
+None of the price columns: Price, weekly price & Monthly price have zero or negative value.
+```{r}
+revCharCol <- colnames(revenue %>% ungroup() %>% select_if(is.character))
+
+
+revZeroNeg <-
+  sapply(revenue[,!(names(revenue) %in% revCharCol)], function(x)
+    count(x <= 0, na.rm = TRUE))
+kable(as.data.frame(revZeroNeg)) %>% kable_styling(bootstrap_options = c("striped", "hover", "responsive")) %>% scroll_box(width = "100%", height = "250px")
+```
+
+
+check for row duplication
+```{r}
+revenue[which(duplicated(revenue) ==T),] 
+```
+Data Filtering
+Inorder to remove columns that add little or no value to the analysis, some of the smart data munging techniques are incorporated. These include removing columns based on pattern matching with their names, imbalanced columns, character columns with 100 % variance etc.
+
+Other variable reduction methods are Principal Component Analysis , Variable clustering based on 1-R2 ratio value we can select the most relevant variables in each cluster.
+  
+Account for Zero Variance, Imbalanced, high NA valued and 100 percent variance character columns.
+Use associated methods to remove these columns from revenue data. Worst case - Manually remove columns keeping the final outcome in mind.
+
+
+Imbalanced/Zero Variance columns add no value to the analysis. These columns are removed using nearzeroVar method from Caret package.
+
+```{r}
+#Columns Removed:
+zvdf <- nearZeroVar(revenue, saveMetrics = TRUE)
+ZVnames=rownames(subset(zvdf, nzv== TRUE))
+revenue <- revenue[ , !(names(revenue) %in% ZVnames)]
+
+#printlis(ZVnames)
+```
+
+Pattern Matching
+Column names starting with ???calendar???,???require???, ???host???  and ending with ???url??? and ???nights??? are irrelevant information when the property is invested in, by the real estate company. These columns are removed.
+
+These methods are taken after going through the overall data and based on what we are targeting as our target variable.
+
+Columns Removed:
+```{r}
+pattern <-
+  colnames(
+    revenue %>% select(
+      starts_with("require"),
+      starts_with("host"),
+      starts_with("calendar"),
+      ends_with("url"),
+      ends_with("nights")
+    )
+  )
+revenue <- revenue[,!(names(revenue) %in% pattern)]
+
+```
+
+
+Based on Unique Values - Character Columns
+Character columns with near 100% variance are removed as they provide no group level information that can be used on a larger population scale.
+
+These columns include textual columns describing the home, host, amenties etc. For lack of conclusion from other variables, these columns can be used for sentimenta analysis.
+
+I have done sentimental analysis using python libraries wherein we have done the following:
+-We have selected the ID and the summary columns of the Airbnb data for our sentimental analysis.
+-The summary gives us an idea of the place where the customers would live and to make it appealing for the customers the owners must portray the details in the most effective way possible.
+-Our sentimental analysis tells us whether the summary provided by the owner for a room/apartment appeals the customers in a positive or a negative way.
+-The wordcloud shows us the intensity of the words that tells us about the word frequency. So, in this case we have made wordclouds for the positive as well as the negative summary.
+-This would help the owners to change their way towards the marketing side, so that they can use the most used positive words in order to increase their customer staying at their place resulting in more revenue for themselves
+
+Columns Removed:
+
+We will also drop columns which have more than 50% missing values
+
+```{r}
+nadf <- revenue %>% summarise_all(funs(sum(is.na(.))))
+nadf <- nadf %>% gather(key = var_name, value = value, 1:ncol(nadf))
+nadf$numNa <- round(nadf$value/nrow(revenue),2)
+naval <- nadf %>% filter(numNa > 0.5) %>% pull(var_name)
+revenue <- revenue[,!(names(revenue) %in% naval)]
+
+#naval
+#revenue
+ 
+dropcol <- c('id',
+             'street',
+             'city',
+             'CountyName',
+             'cleaning_fee',
+             'guests_included',
+             'extra_people',
+             'review_scores_communication',
+             'review_scores_checkin',
+             'review_scores_cleanliness',
+             'review_scores_value',
+             'reviews_per_month',
+             'instant_bookable',
+             'cancellation_policy',
+             'smart_location',
+             'is_location_exact',
+             'calculated_host_listings_count',
+             'name', 
+             'summary', 
+             'space', 
+             'description', 
+             'neighborhood_overview', 
+             'notes', 
+             'transit', 
+             'access', 
+             'interaction', 
+             'house_rules', 
+             'amenities'
+             )  
+
+head(dropcol)
+```
+dropping all the unwanted columns based on various statistical significance, analyzing PCA and the variance lost if we removed these columns
+
+
+```{r}
+revenue <- revenue[,!(names(revenue) %in% dropcol)]
+dim(revenue) 
+```
+overall the number of variables have reduced to 29 now
+
+Clean Revenue Data
+```{r}
+kable(head(revenue))  %>% kable_styling(bootstrap_options = c("striped", "hover", "responsive")) %>% scroll_box(width = "100%", height = "250px")
+```
+
+
+Joining both the clean data based on ZipCOdes and RegionName
+Revenue and Cost Data are merged based on common regionName/Zipcode. The real estate company has already chosen 2 Bed room homes as profitable venture.
+
+Data is further refined to account for only 2 bed room homes. Dimension of the final data set:
+```{r}
+final <- merge(revenue, cost, by.x = "zipcode",by.y = "RegionName")
+final <- subset(final,final$bedrooms == '2')
+dim(final)
+```
+Exploratory Data Analysis
+understanding data
+
+
+```{r}
+kable(head(final))  %>% kable_styling(bootstrap_options = c("striped", "hover", "responsive")) %>% scroll_box(width = "100%", height = "250px")
+```
+
+
+COnverting char to factor
+Data Type Handling
+Convert ???Character??? columns to Factors to ease the process of building discrete charts.
+```{r}
+final <- final %>% mutate_if(sapply(final,is.character),as.factor)
+str(final)
+```
+Corrected Price by Room Type:
+Following are the assumptions made:
+Price of the daily rental in Revenue data is reflective of the space that 
+is offered and not the entire property itself. The price must be specifically corrected to account for 
+entire property to account the benefit.
+
+Assumption Made: If the property type == Private Room, it is multipled by number of bedrooms to account for overall price.
+Correction applied is returned to original price column.
+
+```{r}
+final <- final %>% mutate(price = if_else(room_type == "Private room",
+                                          price * bedrooms,
+                                          price))
+
+final
+```
+
+Missing Values
+Nothing too alarming, major chunk of columns look okay to proceed with the analysis.
+```{r}
+gg_miss_upset(final)
+```
+number of properties by neighbourhood
+```{r}
+ggplot(final, aes(neighbourhood_group_cleansed)) + geom_bar() + labs(x = "Neighbourhood", y = "Number of Properties") + geom_text(stat='count', aes(label=..count..), vjust= -0.3)  + theme_classic()
+```
+number of properties by zipcode
+```{r}
+ggplot(final, aes(zipcode, fill = neighbourhood_group_cleansed)) + geom_bar() + labs(x = "Zipcode", y = "Number of Properties") + geom_text(stat='count', aes(label=..count..), vjust= -0.3) + theme(axis.text.x = element_text(angle = 90, hjust = 1))  + theme_bw() + theme(plot.background = element_blank(),panel.grid.major = element_blank(),panel.grid.minor = element_blank(),panel.border = element_blank(),axis.text.x = element_text(angle = 90, hjust = 1))
+```
+Property cost by zipcode
+```{r}
+medianCost1 <- final %>% select(zipcode,neighbourhood_group_cleansed, cost) %>% filter(neighbourhood_group_cleansed == c("Manhattan","Brooklyn"))  %>% group_by(neighbourhood_group_cleansed,zipcode) %>% summarise_all(funs(median)) %>% ggplot(aes(x = zipcode, y = cost, fill =neighbourhood_group_cleansed )) + geom_bar(stat = "identity") +scale_y_continuous(labels = scales::comma) + labs(y = "Cost", x = "Zipcode") + theme_bw() + theme(plot.background = element_blank(),panel.grid.major = element_blank(),panel.grid.minor = element_blank(),panel.border = element_blank(),axis.text.x = element_text(angle = 90, hjust = 1)) + guides(fill = guide_legend(title = "Neighbourhood"))
+
+medianCost2 <- final %>% select(zipcode,neighbourhood_group_cleansed, cost) %>% filter(neighbourhood_group_cleansed == c("Staten Island","Queens")) %>% group_by(neighbourhood_group_cleansed,zipcode) %>% summarise_all(funs(median)) %>% ggplot(aes(x = zipcode, y = cost, fill =neighbourhood_group_cleansed )) + geom_bar(stat = "identity") +scale_y_continuous(labels = scales::comma) + labs(x = "Cost", y = "Zipcode") + theme_bw() + theme(plot.background = element_blank(),panel.grid.major = element_blank(),panel.grid.minor = element_blank(),panel.border = element_blank(),axis.text.x = element_text(angle = 90, hjust = 1)) + guides(fill = guide_legend(title = "Neighbourhood"))
+
+cowplot::plot_grid(medianCost1, medianCost2, labels = "AUTO", ncol = 1, align = 'v')
+```
+
+Property type Vs Cost
+In order to develop deeper understanding with our data, property cost is measured across different property types: Apartment, House, Loft etc. Based on the analysis we can see the effect a property type has on the cost of it.
+```{r}
+propTypeCost <- ggplot(final, aes(x=property_type, y=cost, fill = zipcode)) + scale_y_continuous(labels = scales::comma) + geom_point(aes(col = zipcode, size=cost)) + 
+  geom_smooth(method="loess", se=F) + labs( x="Property type", y="Cost") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplotly(propTypeCost)
+
+```
+
+Types of property rented in nyc
+```{r}
+
+property_df <- final %>%
+  filter(property_type %in% c("Apartment","Condominium", "House",
+                              "Loft")) %>% 
+  group_by(neighbourhood_group_cleansed) %>%
+  mutate(total_property = n()) %>%
+  group_by(neighbourhood_group_cleansed, property_type) %>%
+  mutate(borough_prop_count = n())
+property_df2 <-unique(select(property_df, neighbourhood_group_cleansed,
+                             property_type, total_property, borough_prop_count)) %>%
+  mutate(ratio = borough_prop_count/total_property)
+
+property_df2 <- bind_rows(property_df2, list(neighbourhood_group_cleansed = "Staten Island",property_type = "Condominium", total_property = 0, borough_prop_count = 0, ratio = 0))
+property_df2 <- bind_rows(property_df2, list(neighbourhood_group_cleansed = "Staten Island",property_type = "Loft", total_property = 0, borough_prop_count = 0, ratio = 0))
+
+
+ggplot(property_df2, aes(x = neighbourhood_group_cleansed, y = ratio,
+                         fill = property_type)) +
+  geom_bar(position = "dodge",stat="identity") + 
+  xlab("Boroughs") + ylab("Count") +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual("Property Type",values=c("#357b8a","turquoise3", "#ff5a5f",
+                                             "darkseagreen")) +
+  ggtitle("Types of Properties Rented in NYC") +
+  theme_minimal()+
+  theme(text = element_text(family = "Georgia", size = 10, face = "bold"),
+        plot.title = element_text(size = 16,color = "#ff5a5f", margin = margin(b = 7)),
+        plot.subtitle = element_text(size = 10, color = "darkslategrey", margin = margin(b = 7)))
+```
+
+Most popular zipcodes
+```{r}
+final %>% group_by(zipcode) %>%
+  summarise(num = n()) %>%
+  arrange() %>%
+  top_n(20) %>%
+  ggplot(aes(x = reorder(zipcode,num), y = num))+
+  geom_bar(stat = "identity", fill = "#00FF00") +
+  coord_flip() +
+  labs(title = "Most popular zipcodes", 
+       subtitle = "zipcodes with most number of Airbnb hosts",
+       colour   = " Borough") +  
+  xlab("Zipcode") +
+  ylab("Number of Airbnb Rentals") +
+  theme_minimal()+
+  theme(text = element_text(size = 10),
+        plot.title = element_text(size = 16,color = "#00FF00", 
+                                  face = "bold",margin = margin(b = 7)),
+        plot.subtitle = element_text(size = 10, color = "darkslategrey", 
+                                     margin = margin(b = 7)))
+
+
+```
+
+
+```{r}
+pricebynbghrhood <- ggplot(final,aes(x=price, fill=neighbourhood_group_cleansed)) + geom_density(alpha = 0.3) +
+  scale_x_continuous(limits = quantile(final$price, c(0, 0.99))) + labs(x = "Price/Night", y = "Density") + 
+  guides(fill = guide_legend(title = "Neighbourhood")) 
+ggplotly(pricebynbghrhood)
+
+```
+Revenue -  Price per property by Zipcode
+- It is important to find effect of zipcode on prices
+Going back to listing zipcodes ,prices/Night have too many close contenders.
+ We will be plotting and finding out the most effective zipcodes where the prices are high
+
+```{r}
+pricebyZipcode <- ggplot(final, aes(x = zipcode,y = price, fill = neighbourhood_group_cleansed)) + geom_boxplot() + scale_y_continuous(limits = quantile(final$price, c(0, 0.99))) + labs(x = "Zipcode", y = "Price/Night") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + guides(fill = guide_legend(title = "Neighbourhood")) 
+ggplotly(pricebyZipcode)
+
+```
+
+
+Pair Wise Correlation:
+Correlation gives us a priliminary idea of how are variables are correlated and which of them could cause multicollinearity
+
+If a property is generously available for booking in the 30 days, it is most likely to be generously available during the rest of the year as well. There is strong positive correlation between (Availablity 30, Availablity 60,Availablity 90 & Availablity 365). The opposite is true. Booked out apartments tend to remain popular across the year.
+
+Interestingly, Number of reviews also drive earlier bookings, which is clearly seen by its positive correlation with column: Availablity 365.
+
+
+Occupancy - Zipcode Vs Availability
+Lower the availablity , higher the occupancy - indicating fast-filling properties.
+
+Looking at Availablity for next 365 days, it is surprising to find a lot of properties booked ahead of time. The company can capitalize on this behavior and vary the price accordindingly to generate more revenue/profits.
+
+Zipcodes that make top 10 from this list: 10021,10023,10025,10028,10128,10304,10312,11201,11215,11231
+```{r}
+
+corCols <- c("availability_30","availability_60","availability_90","availability_365","number_of_reviews","price","cost")
+plot_correlation(final[corCols])
+```
+```{r}
+final %>% group_by(neighbourhood_group_cleansed,zipcode) %>% summarise_all(funs(mean)) %>% 
+  ggplot(aes(x =zipcode,y= availability_365, fill = neighbourhood_group_cleansed )) + geom_bar(stat = "identity") + scale_y_continuous(labels = scales::comma) +  scale_colour_brewer(palette = "Pastel2") + labs( y = "Availability", x = "Zipcode") + theme_bw() + theme(plot.background = element_blank(),panel.grid.major = element_blank(),panel.grid.minor = element_blank(),panel.border = element_blank(),axis.text.x = element_text(angle = 90, hjust = 1)) + guides(fill = guide_legend(title = "Neighbourhood")) 
+```
+
+
+Availability Vs Price
+Stepping aside to understand availablity in terms of price,
+lower price dont exactly drive faster bookings which is a very important observation while strategizing in investing on real estate. Higher rental properties have minimal availablity 
+(compared to next 365 days). It is satisfying to know that people are ready to pay higher ahead of time which showcases the purchasing power of a customer.
+```{r}
+availablityPrice <- final %>% group_by(neighbourhood_group_cleansed,zipcode) %>% summarise_all(funs(mean)) %>% ggplot(aes(x=availability_365, y=price)) + scale_colour_brewer(palette = "Set1") + geom_point(aes(col=neighbourhood_group_cleansed, size=price)) +
+  labs(x="Availability", y="Price", shape="Price", colour= "Neighbourhood")
+
+ggplotly(availablityPrice)
+
+```
+Review scores rating Vs Price
+Are reviews driving the price ? Not likely. Trends are all over the place. Majority of the properties in are highly rated (10).
+Even if we see a higher rating , we still can see that it doesnt mean the place is very expensive to live or is in a posch locality. Sometimes it is also observed that normal localities also have high rating due to very good customers experience with the hosts.
+```{r}
+final$rating <- round(final$review_scores_rating/10,0)
+final$rating <- as.factor(final$rating )
+
+reviewPrice <- ggplot(data = subset(final, !is.na(rating)), aes(x=rating, y=price, colour = zipcode)) + geom_point(aes( size=price)) + scale_y_continuous(limits = quantile(final$price, c(0, 0.99))) + labs(x="Rating", y="Price")
+
+ggplotly(reviewPrice)
+
+```
+
+Performing steps in order to fit various models in order to predict price. Following are the steps done to clean the data again and select the columns which are relevant for model selection and evaluation. We can use various models like xgboost and evaluate the models using various Information criteria like AIC , BIC , SBC etc. We also can plot the ROC curve to understand how well the model is.
+
+
+```{r}
+inp_data <- read.csv("C:/Users/Kartik/Airbnb/airbnbbbbbbb.csv", header = TRUE,stringsAsFactors = F)
+dim(inp_data)
+names(inp_data)
+a <- strsplit(inp_data$amenities,",")
+
+```
+
+
+ Removing variables that contain only a single value
+```{r}
+data1 <- inp_data
+a <- apply(data1,2,unique)
+is.vector(a)
+length(a)
+b <- NULL
+for(i in 1:length(a))
+{
+  if(length(a[[i]])==1){
+    b <- rbind(b,names(a[[i]]))
+  }
+}
+b <- as.vector(b)
+head(b)
+data1[,b] <- NULL
+dim(data1)
+```
+All the url related variables can be removed as they contain weblinks which aren't useful for any kind of analysis
+```{r}
+data1[,names(data1)[grep("url",names(data1))]] <- NULL
+grep("url",names(data1))
+```
+This leads to removal of 8 such variables.Next we removed all those variables which have more than 80% missing values to get more reformed and clean data
+
+```{r}
+a <- apply(data1,2,is.na)
+head(a)
+b <- apply(a,2,sum)
+is.vector(b)  #TRUE
+is.list(b)
+head(b)
+b/5207>=0.80   #b/5207>=0.80 - missing
+b[b/5207>=0.80] 
+names(b[b/5207>=0.80])   
+data1[,names(b[b/5207>=0.80])] <- NULL
+head(data1$square_feet)
+
+```
+This leads to a removal of variable
+ Based on intuition after analyzing the data and further inspection we observed that below variables does not add any value to our analysis and should be removed. Also having performed EDA on the same dataset we have a more clear view of which variables contribute to predicting our target variable price
+ 
+```{r}
+ data1[,c("security_deposit","weekly_price","monthly_price","first_review","last_review","jurisdiction_names","zipcode","street","market","cleaning_fee","name","interaction","access","space","notes","description","host_name","host_has_profile_pic","host_verifications","host_neighborhood","require_guest_profile_picture","require_guest_phone_verification","calculated_host_listings_count", "host_location","transit","neighborhood_overview","house_rules","host_about","license", "requires_license","host_neighbourhood")] <- NULL
+
+```
+
+Removing variables with duplicated values
+
+```{r}
+data1[,names(data1[(duplicated(t(data1)))])] <- NULL
+```
+
+We observed that different listings have different amenities and hence we created flag/dummy variables for the most important amenities we thought a user looks for while booking at Airbnb.
+These amenities are TV, Internet, Air Conditioning, Breakfast, Kitchen, and Pets. Adding amenities categories
+
+```{r}
+a <- data1$amenities
+data1$TV <- ifelse(grepl("TV",a, ignore.case = T)==T,1,0)
+data1$Internet <- ifelse(grepl("Internet",a, ignore.case= T)==T,1,0)
+data1$AirCondition <- ifelse(grepl("conditioning",a, ignore.case =T)==T,1,0)
+data1$Pets <- ifelse(grepl("Pet",a, ignore.case = T)==T,1,0)
+data1$Pets <- ifelse(grepl("Dog",a, ignore.case = T)==T,1,data1$Pets)
+data1$Pets <- ifelse(grepl("Cat",a, ignore.case = T)==T,1,data1$Pets)
+data1$Kitchen <- ifelse(grepl("Kitchen",a, ignore.case = T)==T,1,0)
+data1$Breakfast <- ifelse(grepl("breakfast",a, ignore.case = T)==T,1,0)
+data1[,c("amenities")] <- NULL
+
+```
+
+The data types of variables which we thought might be significant were converted to the appropriate data types.
+Converting price variable to integer
+
+```{r}
+data1$price <- sub("\\$","",data1$price)
+data1$price <- sub(",","",data1$price)
+data1$price <- as.integer(data1$price)
+```
+
+```{r}
+data1$host_response_time <- as.factor(data1$host_response_time)
+data1$host_is_superhost <- as.factor(data1$host_is_superhost)
+data1$host_identity_verified <- as.factor(data1$host_identity_verified)
+data1$neighbourhood_cleansed <- as.factor(data1$neighbourhood_cleansed)
+data1$is_location_exact <- as.factor(data1$is_location_exact)
+data1$property_type <- as.factor(data1$property_type)
+data1$room_type <- as.factor(data1$room_type)
+data1$bed_type <- as.factor(data1$bed_type)
+data1$calendar_updated <- as.factor(data1$calendar_updated)
+data1$instant_bookable <- as.factor(data1$instant_bookable)
+data1$cancellation_policy <- as.factor(data1$cancellation_policy)
+
+```
+
+Treating host_response_rate and extra_people from character to a numeric variable for modeling purpose using SWOE method
+```{r}
+data1$host_response_rate<- as.numeric(sub("%", "", data1$host_response_rate))
+data1$host_response_rate <- data1$host_response_rate/100
+data1$extra_people <- as.numeric(sub("\\$","",data1$extra_people))
+```
+Removing insignificant listings which have price = 0
+
+```{r}
+data1 <- data1[-c(717,1334,3093),]
+```
+We also created a variable about the number of days since the listing was on Airbnb
+
+```{r}
+data1$host_since <- as.Date(data1$host_since)
+data1$host_since <- as.Date("2017-05-10")-data1$host_since
+```
+
+In order to reduce the number of levels in factor variables with large number of levels, we clubbed the factors with low number of listings. In the dataset, we observed that neighbourhood_cleansed, which gives us an idea of the nighbourhood of the listing, has 72 levels. 
+
+```{r}
+
+
+a <- data1 %>% group_by(neighbourhood_cleansed) %>% summarise(len = length(neighbourhood_cleansed))
+
+data1 <- merge(data1,a,by = "neighbourhood_cleansed")
+data1$neighbourhood_cleansed <- as.character(data1$neighbourhood_cleansed)
+data1$neighbourhood_cleansed <- ifelse(data1$len<150,"Others",data1$neighbourhood_cleansed)
+data1$len <- NULL
+```
+Missing Value Treatment
+checking missing values in different columns
+
+```{r}
+missing = data.frame(col=colnames(data1), type = sapply(data1, class), 
+missing = sapply(data1, function(x) sum(is.na(x)| x=="" | x=="N/A"))/nrow(data1) * 100)
+```
+
+Replace missing values in host_response_time with the most common occurring category (its mode)
+```{r}
+data1$host_response_time<- sub("N/A","within an hour", data1$host_response_time)
+```
+Replace missing values in host_response rate with mean values observed for host_response_time when it is within an hour
+```{r}
+data1$host_response_rate <- ifelse(is.na(data1$host_response_rate)==T,0.99,data1$host_response_rate)
+```
+Replace missing values in bathrooms, bedrooms and beds with the median value
+```{r}
+data1$bathrooms <- ifelse(is.na(data1$bathrooms)==T, 1, data1$bathrooms)
+data1$bedrooms <- ifelse(is.na(data1$bedrooms)==T,1,data1$bedrooms)
+data1$beds <- ifelse(is.na(data1$beds)==T,1,data1$beds)
+```
+
+Outliers
+Histogram of price
+
+```{r}
+
+ggplot(data=data1, aes(price)) + 
+geom_histogram(fill="red") + 
+labs(title="Histogram of Price") +
+labs(x="Price", y="Count")
+```
+
+Percentile of price
+```{r}
+quantile(data1$price, c(.9, .95, .97, 0.975, 0.98, 0.99, 0.995, 0.999, 0.9999))
+```
+As we can see from the histogram as well as the percentile distribution of Price, there are extreme values in Price,So we performed Winsorization at 99% level and captured the maximum value of price at 650 USD.
+Capture the extreme values of Price at 99 percentile level
+
+```{r}
+data1$price <- ifelse(data1$price>650,650,data1$price)
+ggplot(data=data1, aes(price)) + 
+  geom_histogram(fill="red") + 
+  labs(title="Histogram of Price") +
+  labs(x="Price", y="Count")
+```
+Visualizing the distribution of no of reviews for different cancellation policy using a boxplot
+```{r}
+
+ggboxplot(inp_data, x = "cancellation_policy", y = "number_of_reviews", 
+          color = "cancellation_policy",
+          ylab = "Number of reviews", xlab = "Cancellation Policy")
+```
+
+Initial inspection of the data using the boxplot suggests that there are differences in the booking rates for different cancellation policies: the accommodations with Strict and Moderate cancellation policies have higher average booking rates (staying rate). To investigate for if there are significant differences among groups quantitatively, we then fited an one-way ANOVA model as below.
+
+Compute the analysis of variance
+```{r}
+anova1 <- aov(number_of_reviews ~ cancellation_policy, data = data1)
+```
+
+Summary of the analysis
+```{r}
+summary(anova1)
+```
+Since, p-value is less than the significance level 0.05 in the moel summary,we reject the null hypothesis and we can say that the number of reviews has an impact on cancellation policies.
+```{r}
+names(data1)
+```
+Visualizing the distribution of review_scores_rating for different bed type using a boxplot
+```{r}
+ggboxplot(data1, x = "bed_type", y = "price", 
+          color = "bed_type",
+          ylab = "price", xlab = "Bed Type")
+```
+
+Initial inspection of the data using the boxplot suggests that there are no differences in the review rating for different bed types. To investigate for if there are differences among different groups quantitatively, we fitted an one-way ANOVA model.
+
+Compute the analysis of variance
+```{r}
+anova2 <- aov(price ~ bed_type, data = data1)
+```
+Summary of the analysis
+```{r}
+summary(anova2)
+```
+Since P-value is smaller than 0.05, we reject the null hypothesis that the price varies based on the bed types.
+
+
+lm
+```{r}
+data_size <- floor(0.8 * nrow(data1))
+train_data <- sample(seq_len(nrow(data1)), size = data_size)
+train <- data1[train_data, ]
+test <- data1[-train_data, ]
+names(data1)
+price_model <- lm(price ~ as.factor(neighbourhood_cleansed) + host_since + Breakfast + Kitchen + Pets + AirCondition + Internet + TV + number_of_reviews + number_of_reviews_ltm + as.factor(cancellation_policy) + guests_included + beds + as.factor(bed_type) + bathrooms + as.factor(property_type) + as.factor(room_type), 
+data = train)
+summary(price_model)
+
+baseline_model <- mean(data1$price)
+(RMSE <- sqrt(mean(baseline_model- test$price)^2))
+coefficients(price_model)
+```
+
+
+Following are the results that we obtained from the above linear regression model along with the hypothesis/explanations of behaviors of the variables:
+
+Based on the p-values for the above regression model, we can say that amenities like TV and Air Conditioning significantly impact the prices. Since the Beta-values are positive, we can say that TV and AC have positive effects on prices (considering other variables are fixed). This can be because AC and TV are comparatively expensive amenties
+
+Also, the booking rate is inversely proportional to the prices considering the other factors remain unchanged
+Number of guests, number of beds, and number of bathrooms directly affect the prices. As the number of guests, beds or bathrooms increases, prices increase (considering amenities/comfort and location is same). This is reasonable and hotels share the same theory.
+
+The categorical variables: neighbourhood, property type, and room type have significant impacts on prices. This is generally true as properties in luxurious localities will be more expensive than other housing areas where provide similar services. Also, a shared room will be cheaper than a whole house/apartment in the same locality.**<br>
+
+
+XGBoost
+```{r}
+
+target_train=train$price
+target_test=test$price
+str(target_train)
+str(train)
+train$price=NULL
+feature_names <- names(train)
+test$price=NULL
+dtrain <- xgb.DMatrix(as.matrix(sapply(train, as.numeric)),label=target_train, missing=NA)
+dtest <- xgb.DMatrix(as.matrix(sapply(test, as.numeric)),label=target_test, missing=NA)
+
+```
+
+Set up cross-validation scheme (3-fold)
+```{r}
+
+foldsCV <- createFolds(target_train, k=7, list=TRUE, returnTrain=FALSE)
+param <- list(booster = "gblinear"
+              , objective = "reg:linear"
+              , subsample = 0.7
+              , max_depth = 5
+              , colsample_bytree = 0.7
+              , eta = 0.037
+              , eval_metric = 'mae'
+              , base_score = 0.012 #average
+              , min_child_weight = 100)
+
+xgb_cv <- xgb.cv(data=dtrain,
+                 params=param,
+                 nrounds=100,
+                 prediction=TRUE,
+                 maximize=FALSE,
+                 folds=foldsCV,
+                 early_stopping_rounds = 30,
+                 print_every_n = 5)
+
+```
+
+Check best results and get best nrounds
+```{r}
+print(xgb_cv$evaluation_log[which.min(xgb_cv$evaluation_log$test_mae_mean)])
+nrounds <- xgb_cv$best_iteration
+
+xgb <- xgb.train(params = param
+                 , data = dtrain
+                 # , watchlist = list(train = dtrain)
+                 , nrounds = nrounds
+                 , verbose = 1
+                 , print_every_n = 5
+                 #, feval = amm_mae
+)
+```
+
+Feature Importance
+```{r}
+importance_matrix <- xgb.importance(feature_names,model=xgb)
+xgb.plot.importance(importance_matrix[1:15,])
+head(test)
+```
+
+Predict
+```{r}
+preds <- predict(xgb,dtest)
+preds
+```
+
+Wordcloud
+```{r}
+
+Description= data1$summary
+
+data2<-Corpus(VectorSource(Description))
+data2<-tm_map(data2,stripWhitespace)
+data2<-tm_map(data2,tolower)
+data2<-tm_map(data2,removeNumbers)
+data2<-tm_map(data2,removePunctuation)
+
+
+
+data2<-tm_map(data2,removeWords, stopwords('english'))
+data2<-tm_map(data2,removeWords, c('and','the','our','that','for','are','also','more','has','must','have','should','this','with'))
+
+
+wordcloud(data2, scale=c(3,0.5), max.words=1000, 
+          random.order=FALSE, rot.per=0.35, use.r.layout=FALSE, colors=brewer.pal(8,'Dark2'))
+```
+
+Conclusion: 
+It can be concluded from the above analysis that When the four neighbourhoods are compared, we can conclude that Manhattan and Brooklyn have higher number of properties listed and have higher number of zipcodes when compared to Queens and Staten Island. 
+
+We also observe a huge difference in price per night for properties in Manhattan and have a few outliers. Queens and Staten Island in contrast have a consistent price per night for the properties listed. 
+
+Zipcodes in Manhattan have properties with the highest price per night asking. 
+
+The mean property cost of properties in Manhattan is very high, and so is the price per night of stay. Hence this neighbourhood has the highest breakeven period. 
+
+We observe that Staten Island zipcodes have lower mean cost of properties, but fairly high price per night making it the most profitable neighbourhoods. 
+
+We can also conclude from our analysis that Brooklyn zipcodes are doing a pretty decent job in terms of breakeven period. Properties have average cost in this zipcodes and the price per night on Airbnb also are neither too high nor too low
+
+Our sentimental analysis tells us whether the summary provided by the owner for a room/apartment appeals the customers in a positive or a negative way. The word cloud shows us the intensity of the words that tells us about the word frequency. So, in this case we have made word clouds for the positive as well as the negative summary. This would help the owners to change their way towards the marketing side, so that they can use the most used positive words in order to increase their customer staying at their place resulting in more revenue for themselves
+
+
+
